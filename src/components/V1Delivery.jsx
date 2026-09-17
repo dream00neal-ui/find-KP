@@ -1,0 +1,23 @@
+import { useEffect, useState } from 'react'
+import { Check, CheckCircle2, Clipboard, Copy, Download, History, LoaderCircle } from 'lucide-react'
+
+const OUTCOME_OPTIONS = [
+  {id:'effective-delivery',label:'演示：已找到有效联系人'},
+  {id:'continuing-search',label:'演示：正在继续查找'},
+  {id:'verified-delivery',label:'演示：专人核验后交付'},
+  {id:'no-effective-contact',label:'演示：核验完成但未找到'},
+]
+const V1_HEADERS=['目标单位/项目','运行状态','匹配KP姓名','对应职务/职责','联系方式','数据置信度']
+
+export function V1Delivery({results=[],trace,onCopy,onExport,onToast}){
+  const [previewOutcome,setPreviewOutcome]=useState('')
+  const [elapsed,setElapsed]=useState(0)
+  const actualSuccess=results.some(result=>result.tier<3&&!result.mobile.includes('待'))
+  const actualOutcome=actualSuccess?'effective-delivery':trace?.reasonCode==='unsupported_target'||trace?.reasonCode==='no_results'?'no-effective-contact':'continuing-search'
+  const displayOutcome=previewOutcome||actualOutcome
+  const success=['effective-delivery','verified-delivery'].includes(displayOutcome)
+  const deliveryRows=results.length?results.map(result=>[result.target,result.status,result.name,result.role,`${result.mobile}${result.wechat?`（${result.wechat}）`:''}`,`${result.verified} · 可信度 ${result.confidence}%`]):[['内蒙古华伊卓资热电有限公司','在产','李志强','物资采购中心主任','186 **** 1953（微信同号）','人工核验 · 可信度 93%']]
+  const resultTable=<div className="v1-result-wrap"><table className="v1-result-table"><thead><tr>{V1_HEADERS.map(header=><th key={header}>{header}</th>)}</tr></thead><tbody>{deliveryRows.map((row,rowIndex)=><tr key={`${row[2]}-${rowIndex}`}>{row.map((cell,index)=><td key={V1_HEADERS[index]}>{cell}</td>)}</tr>)}</tbody></table><div className="v1-result-card">{deliveryRows[0].map((cell,index)=><div key={V1_HEADERS[index]}><span>{V1_HEADERS[index]}</span><strong>{cell}</strong></div>)}</div><footer><span>有效交付条数额度</span><strong>已计入 1 次有效交付</strong></footer></div>
+  useEffect(()=>{if(displayOutcome!=='continuing-search'){setElapsed(0);return undefined}const id=window.setInterval(()=>setElapsed(value=>Math.min(6,value+1)),1000);return()=>window.clearInterval(id)},[displayOutcome])
+  return <section className="v1-delivery" aria-labelledby="v1-delivery-title"><div className="section-heading delivery-heading"><div><span>交付结果</span><h2 id="v1-delivery-title">关键人结构化交付</h2><p>{previewOutcome?'当前为交互原型演示状态':actualSuccess?`共输出 ${results.length} 位匹配 KP，结果来自本次实际检索`:'本次检索未产生可交付的有效联系人'}</p></div>{success&&results.length>0&&<div className="delivery-actions"><button onClick={()=>onCopy(results)}><Copy size={15}/>复制结果</button><button className="export-button" onClick={onExport}><Download size={15}/>导出 CSV</button></div>}</div><div className="prototype-outcome-control"><div><label htmlFor="outcome-preview">原型演示：切换结果状态</label><small>仅切换交付区域展示，不会改变查找进度、任务结果或有效交付条数额度。</small></div><select id="outcome-preview" value={previewOutcome} onChange={event=>setPreviewOutcome(event.target.value)}><option value="">当前任务结果</option>{OUTCOME_OPTIONS.map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></div><div className={`delivery-panel outcome-${displayOutcome}`}>{previewOutcome&&<span className="demo-state-badge">演示状态</span>}{displayOutcome==='effective-delivery'&&<><div className="outcome-summary success"><CheckCircle2 size={18}/><div><strong>已找到并核验有效联系人</strong><p>联系人可直接用于本次业务跟进。</p></div><span className="quota-badge green">已扣 1 条</span></div>{resultTable}</>}{displayOutcome==='verified-delivery'&&<><div className="human-success-banner"><span><CheckCircle2 size={18}/></span><div><strong>专人核验完成，已交付有效联系人</strong><p>身份、岗位职责与联系方式均已确认。</p></div><em>人工终审通过</em></div>{resultTable}</>}{displayOutcome==='continuing-search'&&<div className="async-supply-card" role="status"><span className="async-icon"><LoaderCircle className="spin" size={28}/></span><h3>正在继续查找联系人（已耗时 {elapsed} 秒）</h3><p>暂未找到符合条件的有效联系人，系统正在补充更多公开与合作渠道线索。预计还需 1~3 分钟。</p><div className="async-progress"><i style={{width:`${Math.max(12,elapsed/6*100)}%`}}/></div><div className="async-actions"><button className="primary" onClick={()=>onToast('任务将继续在后台运行，完成后通过微信及站内信通知')}><Check size={15}/>先去处理其他工作，完成后微信/站内信通知我</button><button onClick={()=>onToast('已打开历史任务进度（原型演示）')}><History size={15}/>查看历史任务进度</button></div><small>任务进行中 · 尚未计入有效交付</small></div>}{displayOutcome==='no-effective-contact'&&<div className="diligence-report"><header><span><Clipboard size={22}/></span><div><h3>核验完成，暂未找到有效联系人</h3><p>{trace?.reason||'已说明核验范围、未找到原因和下一步建议。'}</p></div><span className="quota-badge green">本次不计入</span></header><div className="replacement-advice"><strong>交付结果：未获得有效联系方式，本次不计入有效交付。</strong></div></div>}</div></section>
+}
